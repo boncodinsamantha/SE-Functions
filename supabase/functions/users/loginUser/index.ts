@@ -1,32 +1,26 @@
-// Follow this setup guide to integrate the Deno language server with your editor:
-// https://deno.land/manual/getting_started/setup_your_environment
-// This enables autocomplete, go to definition, etc.
+import { serve } from "https://deno.land/x/sift/mod.ts";
 
-// Setup type definitions for built-in Supabase Runtime APIs
-import "jsr:@supabase/functions-js/edge-runtime.d.ts"
+serve(async (req) => {
+    if (req.method !== "POST") {
+        return new Response("Only POST requests are allowed", { status: 405 });
+    }
 
-console.log("Hello from Functions!")
+    const { email, password } = await req.json();
 
-Deno.serve(async (req) => {
-  const { name } = await req.json()
-  const data = {
-    message: `Hello ${name}!`,
-  }
+    if (!email || !password) {
+        return new Response("Missing required fields", { status: 400 });
+    }
 
-  return new Response(
-    JSON.stringify(data),
-    { headers: { "Content-Type": "application/json" } },
-  )
-})
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseKey = Deno.env.get("SUPABASE_KEY");
+    const { createClient } = await import("https://esm.sh/@supabase/supabase-js");
+    const supabase = createClient(supabaseUrl!, supabaseKey!);
 
-/* To invoke locally:
+    const { user, error } = await supabase.auth.signIn({ email, password });
 
-  1. Run `supabase start` (see: https://supabase.com/docs/reference/cli/supabase-start)
-  2. Make an HTTP request:
+    if (error) {
+        return new Response(JSON.stringify({ error: error.message }), { status: 401 });
+    }
 
-  curl -i --location --request POST 'http://127.0.0.1:54321/functions/v1/loginUser' \
-    --header 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0' \
-    --header 'Content-Type: application/json' \
-    --data '{"name":"Functions"}'
-
-*/
+    return new Response(JSON.stringify({ success: true, user }), { status: 200 });
+});
